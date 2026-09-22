@@ -22,6 +22,7 @@ router.get("/", (_req, res) => {
       status: "/api/v1/status",
       routes: "/api/v1/routes",
       proxyEcho: "/api/v1/proxy/echo/*",
+      webhooks: "/api/v1/webhooks",
     },
   });
 });

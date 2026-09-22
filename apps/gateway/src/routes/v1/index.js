@@ -2,8 +2,11 @@ import { Router } from "express";
 import { config } from "../../config.js";
 import { listRoutes, getUpstream } from "../../services/routeRegistry.js";
 import { proxyRequest } from "../../services/proxy.js";
+import webhookRoutes from "./webhooks.js";
 
 const router = Router();
+
+router.use("/webhooks", webhookRoutes);
 
 router.get("/status", (_req, res) => {
   res.json({
