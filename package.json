@@ -1,0 +1,20 @@
+{
+  "name": "hermes",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hermes — API Gateway, webhooks, and futuristic console",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:gateway": "npm run dev --workspace=@hermes/gateway",
+    "dev:web": "npm run dev --workspace=@hermes/web",
+    "build": "npm run build --workspaces --if-present",
+    "start:gateway": "npm run start --workspace=@hermes/gateway",
+    "start:web": "npm run start --workspace=@hermes/web"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

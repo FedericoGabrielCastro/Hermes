@@ -1,0 +1,24 @@
+:root {
+  color-scheme: dark;
+  --bg: #070b14;
+  --fg: #e8eefc;
+  --muted: #8b9bb8;
+  --accent: #3dffe8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+a {
+  color: var(--accent);
+}
