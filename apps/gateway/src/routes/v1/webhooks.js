@@ -4,16 +4,23 @@ import {
   createSubscription,
   listSubscriptions,
   getSubscription,
+  updateSubscription,
   deleteSubscription,
   createEvent,
   listEvents,
   getEvent,
   matchingSubscriptions,
+  listDeadLetters,
+  getDeadLetter,
+  deleteDeadLetter,
+  getSubscriptionRaw,
 } from "../../services/webhookStore.js";
 import { deliverEvent } from "../../services/webhookDelivery.js";
 import { verifySignature } from "../../services/webhookSignature.js";
+import { ingestRateLimit } from "../../middleware/ingestRateLimit.js";
 
 const router = Router();
+const limitIngest = ingestRateLimit(config.ingestRateLimit);
 
 router.post("/subscriptions", (req, res, next) => {
   try {
@@ -39,6 +46,22 @@ router.get("/subscriptions/:id", (req, res) => {
     });
   }
   res.json(subscription);
+});
+
+router.patch("/subscriptions/:id", (req, res, next) => {
+  try {
+    const subscription = updateSubscription(req.params.id, req.body || {});
+    if (!subscription) {
+      return res.status(404).json({
+        error: "Not Found",
+        message: "Subscription not found",
+        requestId: req.requestId,
+      });
+    }
+    res.json(subscription);
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.delete("/subscriptions/:id", (req, res) => {
@@ -93,17 +116,73 @@ router.post("/events/:id/replay", async (req, res, next) => {
   }
 });
 
-/**
- * Ingest an inbound webhook for a named source and fan-out to subscribers.
- * Optional HMAC: set WEBHOOK_INGEST_SECRET and send X-Hermes-Signature.
- */
-router.post("/ingest/:source", async (req, res, next) => {
+router.get("/dead-letters", (req, res) => {
+  const limit = Number(req.query.limit) || 50;
+  const items = listDeadLetters({ limit });
+  res.json({ count: items.length, deadLetters: items });
+});
+
+router.delete("/dead-letters/:id", (req, res) => {
+  const removed = deleteDeadLetter(req.params.id);
+  if (!removed) {
+    return res.status(404).json({
+      error: "Not Found",
+      message: "Dead letter not found",
+      requestId: req.requestId,
+    });
+  }
+  res.status(204).send();
+});
+
+router.post("/dead-letters/:id/replay", async (req, res, next) => {
+  try {
+    const item = getDeadLetter(req.params.id);
+    if (!item) {
+      return res.status(404).json({
+        error: "Not Found",
+        message: "Dead letter not found",
+        requestId: req.requestId,
+      });
+    }
+
+    const sub = getSubscriptionRaw(item.subscriptionId);
+    const targets = sub
+      ? [sub]
+      : matchingSubscriptions({ source: item.source, type: item.type });
+
+    if (!targets.length) {
+      return res.status(409).json({
+        error: "Conflict",
+        message: "No active subscription available for replay",
+        requestId: req.requestId,
+      });
+    }
+
+    const event =
+      getEvent(item.eventId) ||
+      createEvent({
+        source: item.source,
+        type: item.type,
+        payload: item.payload,
+        requestId: req.requestId,
+      });
+
+    const result = await deliverEvent(event, targets);
+    if (result.status === "delivered" || result.deliveries?.some((d) => d.ok)) {
+      deleteDeadLetter(item.id);
+    }
+
+    res.json({ deadLetterId: item.id, eventId: event.id, ...result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/ingest/:source", limitIngest, async (req, res, next) => {
   try {
     const source = req.params.source;
     const type =
-      req.get("x-event-type") ||
-      req.body?.type ||
-      `${source}.event`;
+      req.get("x-event-type") || req.body?.type || `${source}.event`;
 
     const ingestSecret = config.webhooks.ingestSecret;
     if (ingestSecret) {

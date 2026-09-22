@@ -7,7 +7,9 @@ const counters = {
   deliveriesFailed: 0,
   retriesScheduled: 0,
   subscriptionsCreated: 0,
+  subscriptionsUpdated: 0,
   subscriptionsDeleted: 0,
+  deadLetters: 0,
 };
 
 export function bump(name, by = 1) {

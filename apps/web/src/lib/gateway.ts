@@ -41,12 +41,16 @@ export type GatewayStatus = {
   version: string;
   uptimeSeconds: number;
   rateLimit: { windowMs: number; max: number };
+  ingestRateLimit?: { windowMs: number; max: number };
   webhooks?: {
     maxAttempts: number;
     retryBaseMs: number;
     deliveryTimeoutMs: number;
+    maxDeadLetters?: number;
     persistence: boolean;
+    deadLetterQueue?: boolean;
   };
+  docs?: { openapi: string; console: string };
   upstreams: Record<string, { baseUrl: string; timeoutMs: number }>;
   timestamp: string;
 };
@@ -61,9 +65,21 @@ export type GatewayMetrics = {
     deliveriesFailed: number;
     retriesScheduled: number;
     subscriptionsCreated: number;
+    subscriptionsUpdated?: number;
     subscriptionsDeleted: number;
+    deadLetters?: number;
   };
   timestamp: string;
+};
+
+export type AuditEntry = {
+  method: string;
+  path: string;
+  statusCode: number;
+  durationMs: number;
+  requestId?: string | null;
+  ip?: string | null;
+  at: string;
 };
 
 export type GatewayRoute = {
@@ -108,12 +124,31 @@ export type WebhookEvent = {
   requestId?: string | null;
 };
 
+export type DeadLetter = {
+  id: string;
+  eventId: string;
+  subscriptionId: string;
+  url: string;
+  source: string;
+  type: string;
+  error: string;
+  attempts: number;
+  payload: unknown;
+  createdAt: string;
+};
+
 export function fetchStatus() {
   return gatewayFetch<GatewayStatus>("/api/v1/status");
 }
 
 export function fetchMetrics() {
   return gatewayFetch<GatewayMetrics>("/api/v1/metrics");
+}
+
+export function fetchAudit(limit = 40) {
+  return gatewayFetch<{ count: number; entries: AuditEntry[] }>(
+    `/api/v1/audit?limit=${limit}`,
+  );
 }
 
 export function fetchRoutes() {
@@ -132,6 +167,12 @@ export function fetchSubscriptions() {
   );
 }
 
+export function fetchDeadLetters(limit = 20) {
+  return gatewayFetch<{ count: number; deadLetters: DeadLetter[] }>(
+    `/api/v1/webhooks/dead-letters?limit=${limit}`,
+  );
+}
+
 export function createSubscription(body: {
   url: string;
   events?: string[];
@@ -142,6 +183,19 @@ export function createSubscription(body: {
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+export function updateSubscription(
+  id: string,
+  body: Partial<{ url: string; events: string[]; source: string; active: boolean }>,
+) {
+  return gatewayFetch<WebhookSubscription>(
+    `/api/v1/webhooks/subscriptions/${encodeURIComponent(id)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    },
+  );
 }
 
 export function deleteSubscription(id: string) {
@@ -175,6 +229,23 @@ export function replayEvent(id: string) {
   }>(`/api/v1/webhooks/events/${encodeURIComponent(id)}/replay`, {
     method: "POST",
   });
+}
+
+export function replayDeadLetter(id: string) {
+  return gatewayFetch<{
+    deadLetterId: string;
+    eventId: string;
+    status: string;
+  }>(`/api/v1/webhooks/dead-letters/${encodeURIComponent(id)}/replay`, {
+    method: "POST",
+  });
+}
+
+export function deleteDeadLetter(id: string) {
+  return gatewayFetch<void>(
+    `/api/v1/webhooks/dead-letters/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
 }
 
 export function formatUptime(seconds: number) {

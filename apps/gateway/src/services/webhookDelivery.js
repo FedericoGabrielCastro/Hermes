@@ -1,6 +1,7 @@
 import { config } from "../config.js";
 import { buildSignatureHeader } from "./webhookSignature.js";
 import {
+  addDeadLetter,
   appendDelivery,
   getEvent,
   getSubscriptionRaw,
@@ -10,6 +11,7 @@ import { bump } from "./metrics.js";
 
 /**
  * Deliver an event to matching subscriptions, with background retries on failure.
+ * Exhausted failures are written to the dead-letter queue.
  */
 export async function deliverEvent(event, subscriptions) {
   const results = [];
@@ -19,20 +21,33 @@ export async function deliverEvent(event, subscriptions) {
     results.push(attempt);
     bump(attempt.ok ? "deliveriesOk" : "deliveriesFailed");
 
-    if (!attempt.ok && config.webhooks.maxAttempts > 1) {
-      scheduleRetries(event.id, sub.id);
-      results.push({
-        subscriptionId: sub.id,
-        url: sub.url,
-        ok: false,
-        statusCode: 0,
-        durationMs: 0,
-        at: new Date().toISOString(),
-        attempt: 1,
-        retryScheduled: true,
-        error: `Retrying up to ${config.webhooks.maxAttempts} attempts`,
-      });
-      bump("retriesScheduled");
+    if (!attempt.ok) {
+      if (config.webhooks.maxAttempts > 1) {
+        scheduleRetries(event.id, sub.id);
+        results.push({
+          subscriptionId: sub.id,
+          url: sub.url,
+          ok: false,
+          statusCode: 0,
+          durationMs: 0,
+          at: new Date().toISOString(),
+          attempt: 1,
+          retryScheduled: true,
+          error: `Retrying up to ${config.webhooks.maxAttempts} attempts`,
+        });
+        bump("retriesScheduled");
+      } else {
+        addDeadLetter({
+          eventId: event.id,
+          subscriptionId: sub.id,
+          url: sub.url,
+          source: event.source,
+          type: event.type,
+          error: attempt.error,
+          attempts: 1,
+          payload: event.payload,
+        });
+      }
     }
   }
 
@@ -78,6 +93,19 @@ function scheduleRetries(eventId, subscriptionId) {
         const result = await deliverOnce(event, sub, attempt);
         bump(result.ok ? "deliveriesOk" : "deliveriesFailed");
         appendDelivery(eventId, result);
+
+        if (!result.ok && attempt >= maxAttempts) {
+          addDeadLetter({
+            eventId: event.id,
+            subscriptionId: sub.id,
+            url: sub.url,
+            source: event.source,
+            type: event.type,
+            error: result.error,
+            attempts: attempt,
+            payload: event.payload,
+          });
+        }
       } catch (err) {
         console.error(`[gateway] retry failed for ${eventId}:`, err.message);
       }

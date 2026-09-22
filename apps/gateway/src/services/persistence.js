@@ -14,7 +14,7 @@ export function loadPersistedState() {
   ensureDataDir();
   const file = storePath();
   if (!existsSync(file)) {
-    return { subscriptions: [], events: [] };
+    return { subscriptions: [], events: [], deadLetters: [] };
   }
 
   try {
@@ -23,20 +23,22 @@ export function loadPersistedState() {
     return {
       subscriptions: Array.isArray(parsed.subscriptions) ? parsed.subscriptions : [],
       events: Array.isArray(parsed.events) ? parsed.events : [],
+      deadLetters: Array.isArray(parsed.deadLetters) ? parsed.deadLetters : [],
     };
   } catch (err) {
     console.error("[gateway] failed to load persisted webhook state:", err.message);
-    return { subscriptions: [], events: [] };
+    return { subscriptions: [], events: [], deadLetters: [] };
   }
 }
 
-export function persistState({ subscriptions, events }) {
+export function persistState({ subscriptions, events, deadLetters }) {
   ensureDataDir();
   const payload = {
-    version: 1,
+    version: 2,
     updatedAt: new Date().toISOString(),
     subscriptions,
     events,
+    deadLetters,
   };
   writeFileSync(storePath(), JSON.stringify(payload, null, 2), "utf8");
 }
