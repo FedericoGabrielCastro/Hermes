@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { SignalField } from "@/components/SignalField";
 import { SiteNav } from "@/components/SiteNav";
+import { getGatewayUrl } from "@/lib/gateway";
 
 export default function HomePage() {
+  const gatewayUrl = getGatewayUrl();
   return (
     <div style={{ minHeight: "100vh", position: "relative" }}>
       <SignalField />
@@ -86,7 +88,7 @@ export default function HomePage() {
             Open console
           </Link>
           <a
-            href="http://localhost:4000/api/v1/status"
+            href={`${gatewayUrl}/api/v1/status`}
             style={{
               display: "inline-flex",
               alignItems: "center",

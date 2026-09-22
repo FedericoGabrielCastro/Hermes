@@ -13,6 +13,21 @@ Next.js console for Hermes — futuristic operations UI, no login.
 | Path | Description |
 |------|-------------|
 | `/` | Brand landing with signal-field hero |
-| `/console` | Gateway + webhook operations shell |
+| `/console` | Live gateway + webhook operations console |
 
-Copy and UI chrome are in English. Live gateway binding arrives in a follow-up PR.
+## Configuration
+
+Copy `.env.example` to `.env.local`:
+
+```bash
+NEXT_PUBLIC_GATEWAY_URL=http://localhost:4000
+```
+
+Run gateway and web together from the repo root:
+
+```bash
+npm run dev:gateway
+npm run dev:web
+```
+
+Copy and UI chrome are in English. No login required.

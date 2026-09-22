@@ -36,13 +36,16 @@ npm run dev:gateway
 npm run dev:web
 ```
 
-## Features (roadmap)
+Set `NEXT_PUBLIC_GATEWAY_URL` in `apps/web/.env.local` if the gateway is not on `http://localhost:4000`.
+
+## Features
 
 1. Project foundation & workspace setup
 2. API Gateway routing & middleware
 3. Webhook ingestion & delivery
-4. Futuristic console UI ← current
-5. End-to-end gateway ↔ web integration
+4. Futuristic console UI
+5. End-to-end gateway ↔ web integration ← current
+
 ## License
 
 MIT
