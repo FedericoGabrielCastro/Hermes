@@ -5,6 +5,7 @@ import {
   createSubscription,
   deleteSubscription,
   fetchEvents,
+  fetchMetrics,
   fetchRoutes,
   fetchStatus,
   fetchSubscriptions,
@@ -12,6 +13,8 @@ import {
   getGatewayUrl,
   ingestEvent,
   relativeTime,
+  replayEvent,
+  type GatewayMetrics,
   type GatewayRoute,
   type GatewayStatus,
   type WebhookEvent,
@@ -22,7 +25,7 @@ function statusColor(status: string) {
   if (status === "delivered" || status === "online" || status === "ok") {
     return "var(--ok)";
   }
-  if (status === "partial") return "var(--warn)";
+  if (status === "partial" || status === "retrying") return "var(--warn)";
   if (status === "failed") return "var(--danger)";
   return "var(--muted)";
 }
@@ -71,6 +74,7 @@ const buttonGhost: React.CSSProperties = {
 
 export function ConsoleDashboard() {
   const [status, setStatus] = useState<GatewayStatus | null>(null);
+  const [metrics, setMetrics] = useState<GatewayMetrics | null>(null);
   const [routes, setRoutes] = useState<GatewayRoute[]>([]);
   const [events, setEvents] = useState<WebhookEvent[]>([]);
   const [subscriptions, setSubscriptions] = useState<WebhookSubscription[]>([]);
@@ -92,13 +96,16 @@ export function ConsoleDashboard() {
     startTransition(async () => {
       setError(null);
       try {
-        const [statusRes, routesRes, eventsRes, subsRes] = await Promise.all([
-          fetchStatus(),
-          fetchRoutes(),
-          fetchEvents(20),
-          fetchSubscriptions(),
-        ]);
+        const [statusRes, metricsRes, routesRes, eventsRes, subsRes] =
+          await Promise.all([
+            fetchStatus(),
+            fetchMetrics(),
+            fetchRoutes(),
+            fetchEvents(20),
+            fetchSubscriptions(),
+          ]);
         setStatus(statusRes);
+        setMetrics(metricsRes);
         setRoutes(routesRes.routes);
         setEvents(eventsRes.events);
         setSubscriptions(subsRes.subscriptions);
@@ -178,6 +185,20 @@ export function ConsoleDashboard() {
     });
   }
 
+  function onReplay(id: string) {
+    startTransition(async () => {
+      setError(null);
+      setMessage(null);
+      try {
+        const result = await replayEvent(id);
+        setMessage(`Replayed ${result.eventId} · ${result.status}`);
+        refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Replay failed");
+      }
+    });
+  }
+
   const online = Boolean(status);
 
   return (
@@ -209,6 +230,10 @@ export function ConsoleDashboard() {
             <p style={{ color: "var(--muted)", margin: "0.6rem 0 0", maxWidth: "40rem" }}>
               Connected to{" "}
               <code style={{ color: "var(--accent)" }}>{getGatewayUrl()}</code>
+              . Persistence + retries enabled
+              {status?.webhooks
+                ? ` (${status.webhooks.maxAttempts} attempts)`
+                : ""}
               . Refresh every 15s. No login required.
             </p>
           </div>
@@ -252,14 +277,24 @@ export function ConsoleDashboard() {
             tone: "var(--fg)",
           },
           {
-            label: "Routes",
-            value: String(routes.length || "—"),
+            label: "Ingest",
+            value: metrics ? String(metrics.counters.ingestAccepted) : "—",
             tone: "var(--fg)",
           },
           {
-            label: "Events",
-            value: String(events.length || "—"),
+            label: "Deliveries OK",
+            value: metrics ? String(metrics.counters.deliveriesOk) : "—",
             tone: "var(--accent)",
+          },
+          {
+            label: "Retries",
+            value: metrics ? String(metrics.counters.retriesScheduled) : "—",
+            tone: "var(--warn)",
+          },
+          {
+            label: "Routes",
+            value: String(routes.length || "—"),
+            tone: "var(--fg)",
           },
         ].map((stat) => (
           <div
@@ -393,7 +428,9 @@ export function ConsoleDashboard() {
                         marginTop: 2,
                       }}
                     >
-                      {event.source} · {event.id.slice(0, 8)}
+                      {event.source} · {event.id.slice(0, 8)} ·{" "}
+                      {(event.deliveries || []).filter((d) => !d.retryScheduled).length}{" "}
+                      attempts
                     </div>
                   </div>
                   <div style={{ textAlign: "right" }}>
@@ -410,6 +447,19 @@ export function ConsoleDashboard() {
                     <div style={{ color: "var(--muted)", fontSize: "0.75rem" }}>
                       {relativeTime(event.createdAt)}
                     </div>
+                    <button
+                      type="button"
+                      style={{
+                        ...buttonGhost,
+                        marginTop: "0.35rem",
+                        padding: "0.35rem 0.6rem",
+                        fontSize: "0.65rem",
+                      }}
+                      onClick={() => onReplay(event.id)}
+                      disabled={isPending}
+                    >
+                      Replay
+                    </button>
                   </div>
                 </li>
               ))}

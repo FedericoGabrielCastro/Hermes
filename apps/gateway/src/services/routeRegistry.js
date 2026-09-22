@@ -51,6 +51,12 @@ const routes = [
     path: "/api/v1/webhooks/events",
     description: "List recent webhook events and deliveries",
   },
+  {
+    id: "v1-metrics",
+    method: "GET",
+    path: "/api/v1/metrics",
+    description: "Runtime counters for ingest, deliveries, and retries",
+  },
 ];
 
 export function listRoutes() {

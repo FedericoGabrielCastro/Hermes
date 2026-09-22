@@ -1,11 +1,41 @@
 import { randomUUID } from "node:crypto";
+import { config } from "../config.js";
+import { loadPersistedState, persistState } from "./persistence.js";
+import { bump } from "./metrics.js";
 
-const MAX_EVENTS = 200;
 const subscriptions = new Map();
 const events = [];
 
 function now() {
   return new Date().toISOString();
+}
+
+function maxEvents() {
+  return config.webhooks.maxEvents;
+}
+
+export function initStore() {
+  const state = loadPersistedState();
+  subscriptions.clear();
+  events.length = 0;
+
+  for (const sub of state.subscriptions) {
+    subscriptions.set(sub.id, sub);
+  }
+  for (const event of state.events.slice(0, maxEvents())) {
+    events.push(event);
+  }
+
+  console.log(
+    `[gateway] loaded ${subscriptions.size} subscriptions and ${events.length} events from disk`,
+  );
+}
+
+function save() {
+  persistState({
+    subscriptions: [...subscriptions.values()],
+    events: events.slice(0, maxEvents()),
+  });
 }
 
 export function createSubscription({ url, events: eventTypes = ["*"], secret, source }) {
@@ -16,7 +46,6 @@ export function createSubscription({ url, events: eventTypes = ["*"], secret, so
   }
 
   try {
-    // Validate absolute URL
     // eslint-disable-next-line no-new
     new URL(url);
   } catch {
@@ -37,6 +66,8 @@ export function createSubscription({ url, events: eventTypes = ["*"], secret, so
   };
 
   subscriptions.set(subscription.id, subscription);
+  bump("subscriptionsCreated");
+  save();
   return sanitizeSubscription(subscription);
 }
 
@@ -54,7 +85,12 @@ export function getSubscriptionRaw(id) {
 }
 
 export function deleteSubscription(id) {
-  return subscriptions.delete(id);
+  const removed = subscriptions.delete(id);
+  if (removed) {
+    bump("subscriptionsDeleted");
+    save();
+  }
+  return removed;
 }
 
 export function createEvent({ source, type, payload, requestId, headers = {} }) {
@@ -71,12 +107,14 @@ export function createEvent({ source, type, payload, requestId, headers = {} }) 
   };
 
   events.unshift(event);
-  if (events.length > MAX_EVENTS) events.length = MAX_EVENTS;
+  if (events.length > maxEvents()) events.length = maxEvents();
+  bump("ingestAccepted");
+  save();
   return event;
 }
 
 export function listEvents({ limit = 50 } = {}) {
-  return events.slice(0, Math.min(limit, MAX_EVENTS));
+  return events.slice(0, Math.min(limit, maxEvents()));
 }
 
 export function getEvent(id) {
@@ -87,6 +125,16 @@ export function updateEvent(id, patch) {
   const event = getEvent(id);
   if (!event) return null;
   Object.assign(event, patch);
+  save();
+  return event;
+}
+
+export function appendDelivery(eventId, attempt) {
+  const event = getEvent(eventId);
+  if (!event) return null;
+  event.deliveries = [...(event.deliveries || []), attempt];
+  event.status = deriveStatus(event.deliveries);
+  save();
   return event;
 }
 
@@ -97,6 +145,16 @@ export function matchingSubscriptions({ source, type }) {
     const typeOk = sub.events.includes("*") || sub.events.includes(type);
     return sourceOk && typeOk;
   });
+}
+
+export function deriveStatus(deliveries) {
+  if (!deliveries.length) return "stored";
+  const failed = deliveries.filter((d) => !d.ok).length;
+  const ok = deliveries.filter((d) => d.ok).length;
+  if (ok > 0 && failed === 0) return "delivered";
+  if (ok > 0 && failed > 0) return "partial";
+  if (deliveries.some((d) => d.retryScheduled)) return "retrying";
+  return "failed";
 }
 
 function sanitizeSubscription(sub) {

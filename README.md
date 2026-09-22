@@ -11,6 +11,7 @@ Hermes provides a lightweight API Gateway and webhook ingestion layer with a fut
 | Frontend | Next.js (App Router) |
 | API Gateway | Express |
 | Runtime | Node.js |
+| Deploy | Docker Compose |
 
 ## Monorepo layout
 
@@ -19,6 +20,7 @@ Hermes/
 ├── apps/
 │   ├── web/          # Next.js console
 │   └── gateway/      # Express API Gateway + webhooks
+├── .github/workflows # CI
 ├── docker-compose.yml
 ├── package.json
 └── README.md
@@ -27,17 +29,12 @@ Hermes/
 ## Quick start
 
 ```bash
-# Install dependencies (from repo root)
 npm install
-
-# Run API Gateway (default :4000)
-npm run dev:gateway
-
-# Run Next.js console (default :3000)
-npm run dev:web
+npm run dev:gateway   # :4000
+npm run dev:web       # :3000
 ```
 
-Set `NEXT_PUBLIC_GATEWAY_URL` in `apps/web/.env.local` if the gateway is not on `http://localhost:4000`.
+Set `NEXT_PUBLIC_GATEWAY_URL` in `apps/web/.env.local` if needed.
 
 ### Docker
 
@@ -45,19 +42,39 @@ Set `NEXT_PUBLIC_GATEWAY_URL` in `apps/web/.env.local` if the gateway is not on 
 docker compose up --build
 ```
 
-- Console: http://localhost:3000  
-- Gateway: http://localhost:4000  
+- Console: http://localhost:3000
+- Gateway: http://localhost:4000
 
-The web image bakes `NEXT_PUBLIC_GATEWAY_URL=http://localhost:4000` so the browser can reach the published gateway port.
+Webhook state persists in the `hermes-data` volume.
 
-## Features
+### Tests / CI
 
-1. Project foundation & workspace setup
-2. API Gateway routing & middleware
-3. Webhook ingestion & delivery
-4. Futuristic console UI
-5. End-to-end gateway ↔ web integration
-6. Docker Compose deployment ← current
+```bash
+npm test
+npm run build --workspace=@hermes/web
+```
+
+GitHub Actions runs gateway tests and the web production build on every PR.
+
+## Platform capabilities
+
+- Versioned API gateway with request IDs, rate limits, and echo proxy
+- Webhook subscriptions, ingest, HMAC signatures, fan-out delivery
+- Automatic delivery retries with exponential backoff
+- Disk persistence for subscriptions and events
+- `/api/v1/metrics` runtime counters
+- Live console: create subscriptions, ingest events, replay deliveries
+
+## Environment (gateway)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `4000` | Listen port |
+| `HERMES_DATA_DIR` | `<repo>/data` | Persistence directory |
+| `WEBHOOK_MAX_ATTEMPTS` | `3` | Delivery attempts |
+| `WEBHOOK_RETRY_BASE_MS` | `400` | Retry backoff base |
+| `WEBHOOK_INGEST_SECRET` | _(empty)_ | Optional ingest HMAC |
+| `RATE_LIMIT_MAX` | `120` | Requests per window |
 
 ## License
 

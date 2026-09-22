@@ -9,6 +9,9 @@ COPY apps/gateway/src ./src
 
 ENV NODE_ENV=production
 ENV PORT=4000
+ENV HERMES_DATA_DIR=/app/data
+
+RUN mkdir -p /app/data
 
 EXPOSE 4000
 

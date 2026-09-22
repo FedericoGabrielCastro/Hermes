@@ -2,6 +2,7 @@ import { Router } from "express";
 import { config } from "../../config.js";
 import { listRoutes, getUpstream } from "../../services/routeRegistry.js";
 import { proxyRequest } from "../../services/proxy.js";
+import { getMetrics } from "../../services/metrics.js";
 import webhookRoutes from "./webhooks.js";
 
 const router = Router();
@@ -15,6 +16,12 @@ router.get("/status", (_req, res) => {
     version: config.version,
     uptimeSeconds: Math.floor(process.uptime()),
     rateLimit: config.rateLimit,
+    webhooks: {
+      maxAttempts: config.webhooks.maxAttempts,
+      retryBaseMs: config.webhooks.retryBaseMs,
+      deliveryTimeoutMs: config.webhooks.deliveryTimeoutMs,
+      persistence: true,
+    },
     upstreams: Object.fromEntries(
       Object.entries(config.upstreams).map(([name, upstream]) => [
         name,
@@ -23,6 +30,10 @@ router.get("/status", (_req, res) => {
     ),
     timestamp: new Date().toISOString(),
   });
+});
+
+router.get("/metrics", (_req, res) => {
+  res.json(getMetrics());
 });
 
 router.get("/routes", (_req, res) => {
