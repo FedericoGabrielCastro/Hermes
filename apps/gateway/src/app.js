@@ -8,6 +8,7 @@ import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import healthRoutes from "./routes/health.js";
 import v1Routes from "./routes/v1/index.js";
+import { bump } from "./services/metrics.js";
 
 export function createApp() {
   const app = express();
@@ -17,6 +18,10 @@ export function createApp() {
 
   app.use(requestId);
   app.use(cors());
+  app.use((req, _res, next) => {
+    bump("requests");
+    next();
+  });
   app.use(
     morgan((tokens, req, res) =>
       [

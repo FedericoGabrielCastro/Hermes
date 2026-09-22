@@ -41,7 +41,28 @@ export type GatewayStatus = {
   version: string;
   uptimeSeconds: number;
   rateLimit: { windowMs: number; max: number };
+  webhooks?: {
+    maxAttempts: number;
+    retryBaseMs: number;
+    deliveryTimeoutMs: number;
+    persistence: boolean;
+  };
   upstreams: Record<string, { baseUrl: string; timeoutMs: number }>;
+  timestamp: string;
+};
+
+export type GatewayMetrics = {
+  service: string;
+  uptimeSeconds: number;
+  counters: {
+    requests: number;
+    ingestAccepted: number;
+    deliveriesOk: number;
+    deliveriesFailed: number;
+    retriesScheduled: number;
+    subscriptionsCreated: number;
+    subscriptionsDeleted: number;
+  };
   timestamp: string;
 };
 
@@ -71,6 +92,8 @@ export type WebhookDelivery = {
   statusCode: number;
   durationMs: number;
   at: string;
+  attempt?: number;
+  retryScheduled?: boolean;
   error?: string;
 };
 
@@ -87,6 +110,10 @@ export type WebhookEvent = {
 
 export function fetchStatus() {
   return gatewayFetch<GatewayStatus>("/api/v1/status");
+}
+
+export function fetchMetrics() {
+  return gatewayFetch<GatewayMetrics>("/api/v1/metrics");
 }
 
 export function fetchRoutes() {
@@ -137,6 +164,16 @@ export function ingestEvent(
     method: "POST",
     headers: type ? { "x-event-type": type } : undefined,
     body: JSON.stringify(payload),
+  });
+}
+
+export function replayEvent(id: string) {
+  return gatewayFetch<{
+    eventId: string;
+    status: string;
+    deliveries: WebhookDelivery[];
+  }>(`/api/v1/webhooks/events/${encodeURIComponent(id)}/replay`, {
+    method: "POST",
   });
 }
 
