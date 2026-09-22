@@ -9,6 +9,14 @@ Express-based API Gateway for Hermes.
 
 Default port: `4000`
 
+## Docker
+
+From the repository root:
+
+```bash
+docker compose up --build gateway
+```
+
 ## Endpoints
 
 | Method | Path | Description |
