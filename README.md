@@ -40,8 +40,8 @@ npm run dev:web
 
 1. Project foundation & workspace setup
 2. API Gateway routing & middleware
-3. Webhook ingestion & delivery ← current
-4. Futuristic console UI
+3. Webhook ingestion & delivery
+4. Futuristic console UI ← current
 5. End-to-end gateway ↔ web integration
 ## License
 
