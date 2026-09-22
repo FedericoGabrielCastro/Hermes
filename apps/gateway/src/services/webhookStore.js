@@ -5,6 +5,7 @@ import { bump } from "./metrics.js";
 
 const subscriptions = new Map();
 const events = [];
+const deadLetters = [];
 
 function now() {
   return new Date().toISOString();
@@ -14,10 +15,15 @@ function maxEvents() {
   return config.webhooks.maxEvents;
 }
 
+function maxDeadLetters() {
+  return config.webhooks.maxDeadLetters;
+}
+
 export function initStore() {
   const state = loadPersistedState();
   subscriptions.clear();
   events.length = 0;
+  deadLetters.length = 0;
 
   for (const sub of state.subscriptions) {
     subscriptions.set(sub.id, sub);
@@ -25,9 +31,12 @@ export function initStore() {
   for (const event of state.events.slice(0, maxEvents())) {
     events.push(event);
   }
+  for (const item of state.deadLetters.slice(0, maxDeadLetters())) {
+    deadLetters.push(item);
+  }
 
   console.log(
-    `[gateway] loaded ${subscriptions.size} subscriptions and ${events.length} events from disk`,
+    `[gateway] loaded ${subscriptions.size} subscriptions, ${events.length} events, ${deadLetters.length} dead letters`,
   );
 }
 
@@ -35,6 +44,7 @@ function save() {
   persistState({
     subscriptions: [...subscriptions.values()],
     events: events.slice(0, maxEvents()),
+    deadLetters: deadLetters.slice(0, maxDeadLetters()),
   });
 }
 
@@ -69,6 +79,36 @@ export function createSubscription({ url, events: eventTypes = ["*"], secret, so
   bump("subscriptionsCreated");
   save();
   return sanitizeSubscription(subscription);
+}
+
+export function updateSubscription(id, patch = {}) {
+  const sub = subscriptions.get(id);
+  if (!sub) return null;
+
+  if (patch.url !== undefined) {
+    try {
+      // eslint-disable-next-line no-new
+      new URL(patch.url);
+      sub.url = patch.url;
+    } catch {
+      const err = new Error("url must be a valid absolute URL");
+      err.status = 400;
+      throw err;
+    }
+  }
+
+  if (patch.events !== undefined) {
+    sub.events =
+      Array.isArray(patch.events) && patch.events.length ? patch.events : ["*"];
+  }
+  if (patch.source !== undefined) sub.source = patch.source || "*";
+  if (patch.secret !== undefined) sub.secret = patch.secret || null;
+  if (patch.active !== undefined) sub.active = Boolean(patch.active);
+  sub.updatedAt = now();
+
+  bump("subscriptionsUpdated");
+  save();
+  return sanitizeSubscription(sub);
 }
 
 export function listSubscriptions() {
@@ -147,10 +187,59 @@ export function matchingSubscriptions({ source, type }) {
   });
 }
 
+export function addDeadLetter({
+  eventId,
+  subscriptionId,
+  url,
+  source,
+  type,
+  error,
+  attempts,
+  payload,
+}) {
+  const entry = {
+    id: randomUUID(),
+    eventId,
+    subscriptionId,
+    url,
+    source,
+    type,
+    error: error || "Delivery exhausted",
+    attempts: attempts || config.webhooks.maxAttempts,
+    payload: payload ?? {},
+    createdAt: now(),
+  };
+  deadLetters.unshift(entry);
+  if (deadLetters.length > maxDeadLetters()) {
+    deadLetters.length = maxDeadLetters();
+  }
+  bump("deadLetters");
+  save();
+  return entry;
+}
+
+export function listDeadLetters({ limit = 50 } = {}) {
+  return deadLetters.slice(0, Math.min(limit, maxDeadLetters()));
+}
+
+export function getDeadLetter(id) {
+  return deadLetters.find((item) => item.id === id) || null;
+}
+
+export function deleteDeadLetter(id) {
+  const index = deadLetters.findIndex((item) => item.id === id);
+  if (index === -1) return false;
+  deadLetters.splice(index, 1);
+  save();
+  return true;
+}
+
 export function deriveStatus(deliveries) {
   if (!deliveries.length) return "stored";
-  const failed = deliveries.filter((d) => !d.ok).length;
-  const ok = deliveries.filter((d) => d.ok).length;
+  const concrete = deliveries.filter((d) => !d.retryScheduled);
+  if (!concrete.length) return "retrying";
+  const failed = concrete.filter((d) => !d.ok).length;
+  const ok = concrete.filter((d) => d.ok).length;
   if (ok > 0 && failed === 0) return "delivered";
   if (ok > 0 && failed > 0) return "partial";
   if (deliveries.some((d) => d.retryScheduled)) return "retrying";

@@ -4,6 +4,7 @@ import morgan from "morgan";
 import { config } from "./config.js";
 import { requestId } from "./middleware/requestId.js";
 import { rateLimit } from "./middleware/rateLimit.js";
+import { auditMiddleware } from "./middleware/audit.js";
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import healthRoutes from "./routes/health.js";
@@ -18,6 +19,7 @@ export function createApp() {
 
   app.use(requestId);
   app.use(cors());
+  app.use(auditMiddleware);
   app.use((req, _res, next) => {
     bump("requests");
     next();

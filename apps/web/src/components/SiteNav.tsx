@@ -1,6 +1,10 @@
 import Link from "next/link";
 
-export function SiteNav({ active = "home" }: { active?: "home" | "console" }) {
+export function SiteNav({
+  active = "home",
+}: {
+  active?: "home" | "console" | "docs";
+}) {
   return (
     <header
       style={{
@@ -28,24 +32,24 @@ export function SiteNav({ active = "home" }: { active?: "home" | "console" }) {
         Hermes
       </Link>
       <nav style={{ display: "flex", gap: "1.5rem", alignItems: "center" }}>
-        <Link
-          href="/"
-          style={{
-            color: active === "home" ? "var(--accent)" : "var(--muted)",
-            fontSize: "0.9rem",
-          }}
-        >
-          Home
-        </Link>
-        <Link
-          href="/console"
-          style={{
-            color: active === "console" ? "var(--accent)" : "var(--muted)",
-            fontSize: "0.9rem",
-          }}
-        >
-          Console
-        </Link>
+        {(
+          [
+            ["home", "/", "Home"],
+            ["console", "/console", "Console"],
+            ["docs", "/docs", "Docs"],
+          ] as const
+        ).map(([id, href, label]) => (
+          <Link
+            key={id}
+            href={href}
+            style={{
+              color: active === id ? "var(--accent)" : "var(--muted)",
+              fontSize: "0.9rem",
+            }}
+          >
+            {label}
+          </Link>
+        ))}
       </nav>
     </header>
   );

@@ -3,6 +3,8 @@ import { config } from "../../config.js";
 import { listRoutes, getUpstream } from "../../services/routeRegistry.js";
 import { proxyRequest } from "../../services/proxy.js";
 import { getMetrics } from "../../services/metrics.js";
+import { listAudit } from "../../services/auditLog.js";
+import { buildOpenApi } from "../../services/openapi.js";
 import webhookRoutes from "./webhooks.js";
 
 const router = Router();
@@ -16,11 +18,14 @@ router.get("/status", (_req, res) => {
     version: config.version,
     uptimeSeconds: Math.floor(process.uptime()),
     rateLimit: config.rateLimit,
+    ingestRateLimit: config.ingestRateLimit,
     webhooks: {
       maxAttempts: config.webhooks.maxAttempts,
       retryBaseMs: config.webhooks.retryBaseMs,
       deliveryTimeoutMs: config.webhooks.deliveryTimeoutMs,
+      maxDeadLetters: config.webhooks.maxDeadLetters,
       persistence: true,
+      deadLetterQueue: true,
     },
     upstreams: Object.fromEntries(
       Object.entries(config.upstreams).map(([name, upstream]) => [
@@ -28,12 +33,26 @@ router.get("/status", (_req, res) => {
         { baseUrl: upstream.baseUrl, timeoutMs: upstream.timeoutMs },
       ]),
     ),
+    docs: {
+      openapi: "/api/v1/openapi.json",
+      console: "http://localhost:3000/console",
+    },
     timestamp: new Date().toISOString(),
   });
 });
 
 router.get("/metrics", (_req, res) => {
   res.json(getMetrics());
+});
+
+router.get("/audit", (req, res) => {
+  const limit = Number(req.query.limit) || 50;
+  const items = listAudit({ limit });
+  res.json({ count: items.length, entries: items });
+});
+
+router.get("/openapi.json", (_req, res) => {
+  res.json(buildOpenApi());
 });
 
 router.get("/routes", (_req, res) => {

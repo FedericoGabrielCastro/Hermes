@@ -57,6 +57,24 @@ const routes = [
     path: "/api/v1/metrics",
     description: "Runtime counters for ingest, deliveries, and retries",
   },
+  {
+    id: "v1-audit",
+    method: "GET",
+    path: "/api/v1/audit",
+    description: "Recent request audit log",
+  },
+  {
+    id: "v1-openapi",
+    method: "GET",
+    path: "/api/v1/openapi.json",
+    description: "OpenAPI 3 specification",
+  },
+  {
+    id: "v1-webhooks-dead-letters",
+    method: "GET",
+    path: "/api/v1/webhooks/dead-letters",
+    description: "Dead-letter queue for exhausted deliveries",
+  },
 ];
 
 export function listRoutes() {
