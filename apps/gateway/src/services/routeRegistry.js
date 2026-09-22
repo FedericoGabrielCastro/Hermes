@@ -33,6 +33,24 @@ const routes = [
     description: "Forward requests to the echo upstream",
     upstream: "echo",
   },
+  {
+    id: "v1-webhooks-subscriptions",
+    method: "GET|POST",
+    path: "/api/v1/webhooks/subscriptions",
+    description: "List or create webhook subscriptions",
+  },
+  {
+    id: "v1-webhooks-ingest",
+    method: "POST",
+    path: "/api/v1/webhooks/ingest/:source",
+    description: "Ingest an inbound webhook and fan-out to subscribers",
+  },
+  {
+    id: "v1-webhooks-events",
+    method: "GET",
+    path: "/api/v1/webhooks/events",
+    description: "List recent webhook events and deliveries",
+  },
 ];
 
 export function listRoutes() {

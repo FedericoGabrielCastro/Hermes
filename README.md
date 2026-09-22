@@ -39,8 +39,8 @@ npm run dev:web
 ## Features (roadmap)
 
 1. Project foundation & workspace setup
-2. API Gateway routing & middleware ← current
-3. Webhook ingestion & delivery
+2. API Gateway routing & middleware
+3. Webhook ingestion & delivery ← current
 4. Futuristic console UI
 5. End-to-end gateway ↔ web integration
 ## License

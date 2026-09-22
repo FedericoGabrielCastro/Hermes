@@ -13,4 +13,9 @@ export const config = {
       timeoutMs: 8_000,
     },
   },
+  webhooks: {
+    deliveryTimeoutMs: Number(process.env.WEBHOOK_DELIVERY_TIMEOUT_MS) || 5_000,
+    /** Optional HMAC secret for inbound ingest verification */
+    ingestSecret: process.env.WEBHOOK_INGEST_SECRET || null,
+  },
 };
